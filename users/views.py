@@ -271,6 +271,47 @@ class CustomUserList(APIView):
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+
+class CustomUserMeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        serializer = CustomUserSerializer(request.user)
+
+        pulse_logs = request.user.logged_pulses.order_by("-year_week")
+
+        pulse_logs_serializer = PulseLogSerializer(
+            pulse_logs,
+            many=True,
+        )
+        
+        # return Response({
+        #     'id': serializer.data.get('id'),
+        #     'username': serializer.data.get('username'),
+        #     'is_staff': serializer.data.get('is_staff'),
+        #     'first_name': serializer.data.get('first_name'),
+        #     'last_name': serializer.data.get('last_name'),
+        #     'team': serializer.data.get('team') if serializer.data.get('team') else None,
+        #     'has_logged': check_user_has_logged(request.user)
+            
+        # })
+
+
+        return Response({
+            "id": serializer.data.get("id"),
+            "username": serializer.data.get("username"),
+            "email": serializer.data.get("email"),
+            "is_staff": serializer.data.get("is_staff"),
+            "first_name": serializer.data.get("first_name"),
+            "last_name": serializer.data.get("last_name"),
+            "team": serializer.data.get("team"),
+            "has_logged": check_user_has_logged(
+                request.user
+            ),
+            "logged_pulses": pulse_logs_serializer.data,
+        })
+
 
 class CustomAuthToken(ObtainAuthToken):
     def post(self, request, *args, **kwargs):
@@ -301,21 +342,6 @@ class CustomAuthToken(ObtainAuthToken):
             'has_logged': has_logged
         })
 
-class CustomUserMeView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        serializer = CustomUserSerializer(request.user)
-
-        return Response({
-            'id': serializer.data.get('id'),
-            'username': serializer.data.get('username'),
-            'is_staff': serializer.data.get('is_staff'),
-            'first_name': serializer.data.get('first_name'),
-            'last_name': serializer.data.get('last_name'),
-            'team': serializer.data.get('team') if serializer.data.get('team') else None,
-            'has_logged': check_user_has_logged(request.user)
-        })
 
 class  KudosDetail(APIView):
 
