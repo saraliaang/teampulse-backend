@@ -39,6 +39,7 @@ CORS_ORIGIN_ALLOW_ALL = True
 # Application definition
 
 INSTALLED_APPS = [
+    'ai_summary.apps.AiSummaryConfig',
     'pulse_logs.apps.PulseLogsConfig',
     'users.apps.UsersConfig',
     'event_logs.apps.EventLogsConfig',
