@@ -1,7 +1,10 @@
-from functools import lru_cache
+import os
 
 
-MODEL_NAME = "Qwen/Qwen3-4B"
+DEFAULT_MODEL_NAME = "qwen3.7-flash"
+DEFAULT_BASE_URL = (
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+)
 MAX_SUMMARY_WORDS = 80
 
 
@@ -71,31 +74,6 @@ Write one concise weekly team insight following these rules.
 """.strip()
 
 
-@lru_cache(maxsize=1)
-def _load_model():
-    """Load Qwen once, on the first generation request."""
-    try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-    except ImportError as exc:
-        raise LLMGenerationError(
-            "The transformers package is not installed."
-        ) from exc
-
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-        model = AutoModelForCausalLM.from_pretrained(
-            MODEL_NAME,
-            torch_dtype="auto",
-            device_map="auto",
-        )
-    except Exception as exc:
-        raise LLMGenerationError(
-            f"Unable to load {MODEL_NAME}."
-        ) from exc
-
-    return tokenizer, model
-
-
 def _validate_summary(summary):
     cleaned_summary = " ".join(summary.split())
 
@@ -111,7 +89,23 @@ def _validate_summary(summary):
 
 
 def generate_team_summary(metrics):
-    tokenizer, model = _load_model()
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise LLMGenerationError(
+            "The openai package is not installed."
+        ) from exc
+
+    api_key = os.getenv("DASHSCOPE_API_KEY")
+    if not api_key:
+        raise LLMGenerationError(
+            "DASHSCOPE_API_KEY is not configured."
+        )
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url=os.getenv("QWEN_BASE_URL", DEFAULT_BASE_URL),
+    )
 
     messages = [
         {
@@ -128,36 +122,18 @@ def generate_team_summary(metrics):
     ]
 
     try:
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=False,
-        )
-        model_inputs = tokenizer(
-            prompt,
-            return_tensors="pt",
-        ).to(model.device)
-
-        generated_ids = model.generate(
-            **model_inputs,
-            max_new_tokens=160,
-            do_sample=True,
+        completion = client.chat.completions.create(
+            model=os.getenv("QWEN_MODEL", DEFAULT_MODEL_NAME),
+            messages=messages,
+            max_tokens=160,
             temperature=0.7,
             top_p=0.8,
-            top_k=20,
+            extra_body={"enable_thinking": False},
         )
-
-        new_token_ids = generated_ids[0][
-            model_inputs["input_ids"].shape[-1]:
-        ]
-        summary = tokenizer.decode(
-            new_token_ids,
-            skip_special_tokens=True,
-        )
+        summary = completion.choices[0].message.content
     except Exception as exc:
         raise LLMGenerationError(
-            "Qwen failed to generate a team insight."
+            "Qwen Cloud failed to generate a team insight."
         ) from exc
 
     return _validate_summary(summary)
